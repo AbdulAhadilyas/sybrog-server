@@ -10,7 +10,7 @@ const app = express();
 
 app.use(express.json());
 app.use(cors());
-let Port = 8000;
+let Port = process.env.PORT || 8000;
 // to create http server
 const server = http.createServer(app);
 
