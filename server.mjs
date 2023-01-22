@@ -1,28 +1,34 @@
 import express from "express";
 import http from "http";
-import todoRouter from "./routes/todoItem.mjs";
-import mongoose from "mongoose";
+import todoRouter from "./routes/todos.mjs";
 import GetClassIdRouter from "./routes/getClassId.mjs";
+import FileUpload from "./routes/fileUpload.mjs";
 import cors from "cors";
 import { Server } from "socket.io";
+import morgan from 'morgan'
 
+import mongoose from "mongoose";
+
+import * as dotenv from 'dotenv'
+dotenv.config()
 const app = express();
 
+app.use(morgan('dev'));
 app.use(express.json());
 app.use(cors());
-let Port = process.env.PORT || 8000;
+let PORT = process.env.PORT || 8000;
 // to create http server
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: `http://localhost:8000`,
-    methods: ["GET", "POST"],
+    origin: "*",
   },
 });
 
-const url =
-  "mongodb+srv://ahadilyas:ahadmemon@cluster0.ahq9c1k.mongodb.net/sysBorg?retryWrites=true&w=majority";
+const url = process.env.MONGODB_URL
+
+
 await mongoose.connect(url).then(() => console.log("connected"));
 
 mongoose.connection.on("connected", () => {
@@ -52,20 +58,29 @@ process.on("SIGINT", () => {
   });
 });
 
-app.get("/ip", async (req, res) => {
+
+
+
+io.on("connection", (socket) => {
+  console.log(`a user connected ${socket.id}`);
+  socket.on("chat message", (msg) => {
+    console.log("message: " + msg);
+    socket.broadcast.emit("chat message", msg);
+    socket.on("disconnect", () => {
+      console.log(`socket ${socket.id} disconnected`);
+    });
+  });
+});
+
+
+app.get("/api/v1/ip", async (req, res) => {
   var ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || null;
   res.send(ip);
 });
 
 app.use("/", todoRouter);
 app.use("/", GetClassIdRouter);
+app.use("/", FileUpload);
 
-io.on("connection", (socket) => {
-  console.log("a user connected");
 
-  socket.on("message", (data) => {
-    socket.broadcast.emit("getData" ,data)
-  });
-});
-
-server.listen(Port);
+server.listen(PORT);

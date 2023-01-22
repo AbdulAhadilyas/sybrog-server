@@ -2,7 +2,7 @@ import express from "express";
 
 const router = express.Router();
 
-router.post("/data/classId/:id", (req, res) => {
+router.post("/api/v1/classId/:id", (req, res) => {
   try {
     res.status(200).json(req.params.id);
   } catch (err) {
@@ -11,3 +11,4 @@ router.post("/data/classId/:id", (req, res) => {
 });
 
 export default router;
+                
