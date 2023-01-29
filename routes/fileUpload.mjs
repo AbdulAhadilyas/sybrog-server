@@ -2,14 +2,16 @@ import admin from "firebase-admin";
 import multer from "multer";
 import fs from "fs";
 import express from "express";
+import TodoModal from "../models/TodoSchema.mjs";
+import createClassModal from "../models/createClass.mjs";
 import * as dotenv from "dotenv";
+import { io } from "../server.mjs";
 dotenv.config();
 const router = express.Router();
 
 const storageConfig = multer.diskStorage({
   destination: "./uploads/",
   filename: function (req, file, cb) {
-    console.log("mul-file: ", file);
     cb(null, `${new Date().getTime()}-${file.originalname}`);
   },
 });
@@ -29,11 +31,7 @@ let serviceAccount = {
   auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
   client_x509_cert_url:
     "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-mmwx4%40air-sysborg-9e768.iam.gserviceaccount.com",
-}
-
-
-
-
+};
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -44,29 +42,40 @@ const bucket = admin.storage().bucket("gs://air-sysborg-9e768.appspot.com");
 //==============================================
 
 router.post("/api/v1/upload", upload.any(), (req, res, next) => {
+  console.log("mul-file: ", req);
   bucket.upload(
     req.files[0].path,
-    {
-      destination: `/temp/`,
-    },
-    function (err, file, apiResponse) {
+    // {
+    //   destination: `/temp/`,
+    // },
+    async (err, file, apiResponse) => {
       if (!err) {
-        file
-          .getSignedUrl({
+        try {
+          const signedUrls = await file.getSignedUrl({
             action: "read",
             expires: "03-09-2491",
-          })
-          .then((urlData, err) => {
-            if (!err) {
-              try {
-                fs.unlinkSync(req.files[0].path);
-                //file removed
-              } catch (err) {
-                console.error(err);
-              }
-              res.status(200).send(urlData[0]);
-            }
           });
+          fs.unlinkSync(req.files[0].path);
+          const toDos = new TodoModal({
+            text:req.body.text,
+            ip: req.body.ip,
+            cType: req.body.cType,
+            url: signedUrls[0],
+            fileType: req.body.fileType,
+          });
+          const saveTodo = await toDos.save();
+          await createClassModal.findByIdAndUpdate(
+            req.body.id,
+            {
+              $push: {
+                classData: { $each: [saveTodo._id], $position: 0 },
+              },
+            },
+            { new: true, useFindAndModify: false }
+          );
+          io.emit(`class-todos`, saveTodo);
+          res.status(200).send();
+        } catch (error) {}
       } else {
         console.log("err: ", err);
         res.status(500).send();

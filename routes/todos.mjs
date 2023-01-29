@@ -1,10 +1,16 @@
 import TodoModal from "../models/TodoSchema.mjs";
 import express from "express";
 import createClassModal from "../models/createClass.mjs";
+import { io } from "../server.mjs";
 const router = express.Router();
 
 router.post("/api/v1/addItem/:id", async (req, res) => {
   console.log(req.params.id);
+
+  if (!req.body.text || !req.body.ip || !req.body.cType) {
+    res.status(400).send("invalid input");
+    return;
+  }
   try {
     const toDos = new TodoModal({
       text: req.body.text,
@@ -14,7 +20,7 @@ router.post("/api/v1/addItem/:id", async (req, res) => {
       fileType: req.body.fileType,
     });
     const saveTodo = await toDos.save();
-    const classTodos = await createClassModal.findByIdAndUpdate(
+    await createClassModal.findByIdAndUpdate(
       req.params.id,
       {
         $push: {
@@ -23,14 +29,18 @@ router.post("/api/v1/addItem/:id", async (req, res) => {
       },
       { new: true, useFindAndModify: false }
     );
-    res.status(200).json(classTodos);
+    io.emit(`class-todos`, saveTodo);
+    res.status(200);
   } catch (err) {
     res.json(err);
   }
 });
 
 router.post("/api/v1/createclass", async (req, res) => {
-  console.log("done");
+  if (!req.body.className ) {
+    res.status(400).send("invalid input");
+    return;
+  }
   try {
     const createClass = new createClassModal({
       className: req.body.className,
@@ -43,6 +53,7 @@ router.post("/api/v1/createclass", async (req, res) => {
 });
 
 router.get("/api/v1/getItem/:classname", async (req, res) => {
+ 
   try {
     const getAllTodo = await createClassModal
       .find({ className: req.params.classname }, function (err, data) {
@@ -103,7 +114,7 @@ router.delete("/api/v1/delete-one/:classid/:id", async (req, res) => {
       req.params.classid,
       {
         $pullAll: {
-          classData:[req.params.id],
+          classData: [req.params.id],
         },
       }
     );
